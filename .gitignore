@@ -1,6 +1,6 @@
 # Compiled binaries
-dil
-dilctl
+/dil
+/dilctl
 
 # OS/editor artifacts
 *.swp
