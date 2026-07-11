@@ -1,0 +1,143 @@
+package lewitt
+
+import (
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+)
+
+type InstallTarget int
+
+const (
+	InstallSystem InstallTarget = iota
+	InstallUser
+)
+
+func (t InstallTarget) String() string {
+	if t == InstallSystem {
+		return "system"
+	}
+	return "user"
+}
+
+func InstallConfig(target InstallTarget, dryRun bool) error {
+	alsaConf := fmt.Sprintf(alsamSystemConfTemplate,
+		alsamPCMName, CardID, CardID, alsamPCMName, CardID)
+
+	wpRule := fmt.Sprintf(wpRuleTemplate, alsamPCMName)
+
+	var alsaPath, wpPath string
+	if target == InstallSystem {
+		alsaPath = alsamSystemConfPath
+		wpPath = filepath.Join(wpSystemConfDir, wpRuleFileBasename)
+	} else {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return fmt.Errorf("cannot determine home directory: %w", err)
+		}
+		alsaPath = filepath.Join(home, ".config", "alsa", "asoundrc")
+		wpPath = filepath.Join(home, ".config", "wireplumber", "main.lua.d", wpRuleFileBasename)
+	}
+
+	if dryRun {
+		fmt.Printf("[dry-run] Would write ALSA config to: %s\n", alsaPath)
+		fmt.Printf("[dry-run] --- ALSA config ---\n%s\n", alsaConf)
+		fmt.Printf("[dry-run] Would write WirePlumber rule to: %s\n", wpPath)
+		fmt.Printf("[dry-run] --- WirePlumber rule ---\n%s\n", wpRule)
+		fmt.Println("[dry-run] Would restart WirePlumber to release the device")
+		return nil
+	}
+
+	if err := writeConfig(alsaPath, alsaConf); err != nil {
+		return fmt.Errorf("failed to write ALSA config: %w", err)
+	}
+	fmt.Printf("ALSA config written to: %s\n", alsaPath)
+
+	if err := writeConfig(wpPath, wpRule); err != nil {
+		return fmt.Errorf("failed to write WirePlumber rule: %w", err)
+	}
+	fmt.Printf("WirePlumber rule written to: %s\n", wpPath)
+
+	fmt.Println("Restarting WirePlumber to release the device...")
+	if err := restartWirePlumber(); err != nil {
+		fmt.Printf("Warning: could not restart WirePlumber: %v\n", err)
+		fmt.Println("The rule will take effect on next WirePlumber restart or reboot.")
+	} else {
+		fmt.Println("WirePlumber restarted.")
+	}
+
+	return nil
+}
+
+func writeConfig(path, content string) error {
+	dir := filepath.Dir(path)
+	if dir != "" && !fileExists(dir) {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return err
+		}
+	}
+	return os.WriteFile(path, []byte(content), 0644)
+}
+
+func restartWirePlumber() error {
+	cmd := exec.Command("systemctl", "--user", "restart", "wireplumber.service")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
+func TeardownConfig(dryRun bool) error {
+	status := CheckConfig()
+	var removed []string
+
+	pathsToRemove := []string{}
+	if status.ALSAMInstalled {
+		pathsToRemove = append(pathsToRemove, status.ALSAMPath)
+	}
+	if status.WPIgnoreInstalled {
+		pathsToRemove = append(pathsToRemove, status.WPIgnorePath)
+	}
+
+	if len(pathsToRemove) == 0 {
+		fmt.Println("No dilctl configuration found to remove.")
+		return nil
+	}
+
+	if dryRun {
+		for _, p := range pathsToRemove {
+			fmt.Printf("[dry-run] Would remove: %s\n", p)
+		}
+		fmt.Println("[dry-run] Would restart WirePlumber to re-discover the device")
+		return nil
+	}
+
+	for _, p := range pathsToRemove {
+		if err := os.Remove(p); err != nil {
+			fmt.Printf("Warning: could not remove %s: %v\n", p, err)
+		} else {
+			fmt.Printf("Removed: %s\n", p)
+			removed = append(removed, p)
+		}
+	}
+
+	if len(removed) > 0 {
+		fmt.Println("Restarting WirePlumber to re-discover the device...")
+		if err := restartWirePlumber(); err != nil {
+			fmt.Printf("Warning: could not restart WirePlumber: %v\n", err)
+			fmt.Println("The change will take effect on next WirePlumber restart or reboot.")
+		} else {
+			fmt.Println("WirePlumber restarted. Lewitt should now be managed by PipeWire.")
+		}
+	}
+
+	return nil
+}
+
+func ValidateConfig() error {
+	status := CheckConfig()
+	if !status.ALSAMInstalled {
+		return fmt.Errorf("ALSA config not installed. Run 'dilctl setup' first")
+	}
+	return nil
+}

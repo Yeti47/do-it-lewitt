@@ -1,0 +1,13 @@
+# Compiled binaries
+dil
+dilctl
+
+# OS/editor artifacts
+*.swp
+*.swo
+*~
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
