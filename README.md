@@ -25,16 +25,27 @@ This utility:
 
 ## Quick Start (End Users)
 
-### 1. Build the CLI
+### 1. Install
 
 ```sh
-go build -o dilctl ./cmd/dilctl
+./scripts/install.sh
 ```
+
+This builds both `dilctl` (CLI) and `dil` (GUI), installs them to `~/.local/bin/` (or `/usr/local/bin/` with sudo), and sets up `dil` as a systemd user service that auto-starts on login.
+
+Run `sudo ./scripts/install.sh` for a system-wide install instead.
+
+Flags:
+- `--no-gui` — CLI only, skip building/installing `dil`
+- `--no-autostart` — don't set up the systemd autostart service
+- `--uninstall` — remove binaries and service
+
+If the GUI build fails due to missing dependencies, run `sudo bash scripts/install-gui-deps.sh` first, then re-run `install.sh`.
 
 ### 2. Check device status
 
 ```sh
-./dilctl status
+dilctl status
 ```
 
 This detects the CONNECT 2 and shows its current state:
@@ -58,7 +69,7 @@ Lewitt CONNECT 2
 ### 3. Run setup
 
 ```sh
-./dilctl setup --user
+dilctl setup --user
 ```
 
 This installs:
@@ -70,7 +81,7 @@ Use `sudo ./dilctl setup` (without `--user`) to install system-wide at `/etc/als
 ### 4. Verify it works
 
 ```sh
-./dilctl verify
+dilctl verify
 ```
 
 Records a 2-second clip from the `lewitt_connect_2` PCM, analyzes signal levels per channel, and plays it back through the headphone output:
@@ -93,26 +104,15 @@ Verification results:
 
 In Audacity's device toolbar, select **`lewitt_connect_2`** as the recording device. It will record in stereo (2 channels) from the correct XLR inputs.
 
-## GUI Application
+### GUI
 
-The project also includes a system tray GUI (`dil`) with a web-based interface for setup, live level meters, and diagnostics.
-
-### Build dependencies
-
-The GUI requires additional development packages (CGo + GTK3):
+The GUI (`dil`) runs as a system tray application. If you used `install.sh` with autostart enabled, it's already running — check your system tray. Otherwise, launch it manually:
 
 ```sh
-sudo bash scripts/install-gui-deps.sh
+dil
 ```
 
-### Build and run
-
-```sh
-CGO_ENABLED=1 go build -o dil ./cmd/dil
-./dil
-```
-
-This puts an icon in your system tray. Click **"Open GUI"** to open the web interface, which provides:
+Click **"Open GUI"** in the tray menu to open the web interface, which provides:
 
 - **Status tab** — device info and configuration state with Setup/Teardown buttons
 - **Verify tab** — live level meters and a record/playback test with a mono playback toggle
@@ -157,7 +157,7 @@ Use "dilctl [command] --help" for more information about a command.
 To undo the setup and let WirePlumber manage the device again:
 
 ```sh
-./dilctl teardown
+dilctl teardown
 ```
 
 ## Factory Reset
@@ -191,7 +191,8 @@ do-it-lewitt/
 │   ├── diagnose.go             # Full diagnostic dump
 │   └── audio.go                # Subprocess-based level meter capture
 ├── scripts/
-│   ├── install-gui-deps.sh     # Install GTK3 dev deps for building dil
+│   ├── install.sh             # Build, install binaries, set up autostart
+│   ├── install-gui-deps.sh    # Install GTK3 dev deps for building dil
 │   └── restore-factory-audio.sh # Factory reset for audio stack
 ├── go.mod
 ├── go.sum
