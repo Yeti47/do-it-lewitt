@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 )
 
 func Detect() (*DeviceInfo, error) {
@@ -69,6 +70,7 @@ func Detect() (*DeviceInfo, error) {
 
 		prodName, _ := os.ReadFile(filepath.Join(usbParent, "product"))
 		dev.Product = strings.TrimSpace(string(prodName))
+		dev.USBDevicePath = usbParent
 
 		dev.CardName = strings.TrimSpace(line)
 		dev.Connected = true
@@ -77,6 +79,48 @@ func Detect() (*DeviceInfo, error) {
 	}
 
 	return &DeviceInfo{Connected: false}, nil
+}
+
+// ResetUSB re-enumerates the CONNECT 2 through sysfs. The authorized
+// attribute is root-owned on normal systems, so callers should run this as
+// root when recovery is needed.
+func ResetUSB() error {
+	dev, err := Detect()
+	if err != nil {
+		return err
+	}
+	if !dev.Connected {
+		return fmt.Errorf("Lewitt CONNECT 2 is not connected")
+	}
+	if os.Geteuid() != 0 {
+		return fmt.Errorf("USB reset requires root; rerun as: sudo dilctl reset")
+	}
+
+	authorized := filepath.Join(dev.USBDevicePath, "authorized")
+	if err := os.WriteFile(authorized, []byte("0\n"), 0644); err != nil {
+		return fmt.Errorf("deauthorizing %s: %w", dev.USBDevicePath, err)
+	}
+
+	// The USB device directory normally remains available after deauthorization,
+	// but wait briefly before reauthorizing to let the kernel release ALSA.
+	for i := 0; i < 20; i++ {
+		if _, err := os.Stat(authorized); err == nil {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	if err := os.WriteFile(authorized, []byte("1\n"), 0644); err != nil {
+		return fmt.Errorf("reauthorizing %s: %w", dev.USBDevicePath, err)
+	}
+
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		if current, err := Detect(); err == nil && current.Connected {
+			return nil
+		}
+		time.Sleep(250 * time.Millisecond)
+	}
+	return fmt.Errorf("USB device did not re-enumerate within 10 seconds")
 }
 
 func resolveUSBParent(sysfsBase string) (string, error) {

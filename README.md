@@ -129,6 +129,7 @@ Available Commands:
   setup       Install ALSA config and WirePlumber ignore rule
   verify      Record and playback test to confirm the device works
   diagnose    Dump full diagnostic information
+  reset       Reset the CONNECT 2 USB device when it is stuck
   teardown    Remove dilctl config and restore WirePlumber management
 
 Flags:
@@ -159,6 +160,20 @@ To undo the setup and let WirePlumber manage the device again:
 ```sh
 dilctl teardown
 ```
+
+## USB Recovery
+
+If the device produces robotic noise, hangs while opening, or the kernel log
+contains `usb_set_interface failed (-110)`, re-enumerate it with:
+
+```sh
+sudo dilctl reset
+```
+
+The reset is intentionally root-only because it writes the USB device's
+sysfs `authorized` attribute. It identifies the CONNECT 2 by USB vendor and
+product ID rather than assuming a fixed USB bus or ALSA card number. After the
+reset, rescan audio devices in Audacity if necessary.
 
 ## Factory Reset
 
@@ -218,10 +233,11 @@ All ALSA configs reference the device by its stable card ID (`C2`), not by card 
 
 ### How the ALSA PCM works
 
-The `lewitt_connect_2` PCM uses ALSA's `asym` plugin to handle capture and playback separately:
+The `lewitt_connect_2` PCM uses ALSA's `asym` plugin to handle capture and playback separately. Both directions use fixed native hardware settings of S32_LE at 48 kHz. This avoids repeatedly switching the CONNECT 2's USB alternate settings while applications probe devices, which can otherwise trigger firmware USB timeouts.
 
-- **Capture**: `plug` → `route` (4ch hw → 2ch, extracting FL and FR via ttable)
-- **Playback**: `plug` → `hw` (native 2ch, headphone out)
+- **Capture**: `plug` → `route` → `dsnoop` → 4ch hw; extracts FL and FR via `ttable` and drops the spurious channels
+- **Playback**: `plug` → `dmix` → 2ch hw; allows shared access to the headphone output
+- Client applications can still request mono, 44.1 kHz, or 96 kHz; ALSA performs the conversion around the fixed hardware stream.
 
 ## License
 

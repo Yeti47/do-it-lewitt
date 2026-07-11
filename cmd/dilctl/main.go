@@ -33,10 +33,26 @@ func main() {
 		Long:  "dilctl configures the Lewitt CONNECT 2 audio interface to work correctly under Linux by installing an ALSA PCM (routing the 4-channel capture to the correct 2-channel FL/FR inputs) and a WirePlumber rule to keep the device free for direct ALSA access.",
 	}
 
-	rootCmd.AddCommand(statusCmd(), setupCmd(), verifyCmd(), diagnoseCmd(), teardownCmd())
+	rootCmd.AddCommand(statusCmd(), setupCmd(), verifyCmd(), diagnoseCmd(), teardownCmd(), resetCmd())
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
+	}
+}
+
+func resetCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "reset",
+		Short: "Reset the CONNECT 2 USB device when it is stuck",
+		Long:  "Deauthorizes and reauthorizes the CONNECT 2 USB device so the kernel and ALSA re-enumerate it. This command requires root privileges.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			fmt.Println("Resetting Lewitt CONNECT 2 USB device...")
+			if err := lewitt.ResetUSB(); err != nil {
+				return err
+			}
+			fmt.Println("USB device reset and re-enumerated successfully.")
+			return nil
+		},
 	}
 }
 
