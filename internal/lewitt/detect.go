@@ -239,6 +239,13 @@ func CheckConfig() *ConfigStatus {
 			break
 		}
 	}
+	for _, p := range []string{wpSystemConfDir + "/" + wpRuleDisabledName, expandUserPath("~/.config/wireplumber/main.lua.d/" + wpRuleDisabledName)} {
+		if fileExists(p) {
+			status.WPIgnoreDisabled = true
+			status.WPIgnoreDisabledPath = p
+			break
+		}
+	}
 
 	return status
 }

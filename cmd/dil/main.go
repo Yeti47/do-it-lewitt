@@ -27,6 +27,9 @@ var iconConnected []byte
 //go:embed icon_off.png
 var iconDisconnected []byte
 
+//go:embed icon_pipewire.png
+var iconPipeWire []byte
+
 var (
 	levelMeter  *lewitt.LevelMeter
 	server      *http.Server
@@ -51,6 +54,7 @@ func onReady() {
 
 	mOpen := systray.AddMenuItem("Open GUI", "")
 	mSetup := systray.AddMenuItem("Setup", "")
+	mWP := systray.AddMenuItem("Toggle PipeWire Device", "")
 	mVerify := systray.AddMenuItem("Quick Verify", "")
 	mDiagnose := systray.AddMenuItem("Diagnostics", "")
 	systray.AddSeparator()
@@ -63,6 +67,18 @@ func onReady() {
 				openBrowser()
 			case <-mSetup.ClickedCh:
 				execSetup()
+				updateTrayIcon()
+				updateTrayStatus(mStatus)
+			case <-mWP.ClickedCh:
+				cfg := lewitt.CheckConfig()
+				target := lewitt.InstallUser
+				if os.Geteuid() == 0 {
+					target = lewitt.InstallSystem
+				}
+				err := lewitt.SetWPIgnore(target, !cfg.WPIgnoreInstalled, false)
+				if err != nil {
+					notify("Do it, Lewitt!: PipeWire toggle failed", err.Error())
+				}
 				updateTrayIcon()
 				updateTrayStatus(mStatus)
 			case <-mVerify.ClickedCh:
@@ -102,7 +118,10 @@ func updateTrayIcon() {
 	cfg := lewitt.CheckConfig()
 	if cfg.ALSAMInstalled && cfg.WPIgnoreInstalled {
 		systray.SetIcon(iconConnected)
-		systray.SetTooltip("Do it, Lewitt! — connected, configured")
+		systray.SetTooltip("Do it, Lewitt! — connected, direct ALSA mode")
+	} else if cfg.ALSAMInstalled && cfg.WPIgnoreDisabled {
+		systray.SetIcon(iconPipeWire)
+		systray.SetTooltip("Do it, Lewitt! — connected, PipeWire enabled")
 	} else {
 		systray.SetIcon(iconDisconnected)
 		systray.SetTooltip("Do it, Lewitt! — connected, NOT configured (click Setup)")
@@ -117,7 +136,9 @@ func updateTrayStatus(m *systray.MenuItem) {
 	}
 	cfg := lewitt.CheckConfig()
 	if cfg.ALSAMInstalled && cfg.WPIgnoreInstalled {
-		m.SetTitle("Status: connected, configured ✓")
+		m.SetTitle("Status: connected, direct ALSA mode ✓")
+	} else if cfg.ALSAMInstalled && cfg.WPIgnoreDisabled {
+		m.SetTitle("Status: connected, PipeWire enabled ✓")
 	} else {
 		m.SetTitle("Status: connected, NOT configured")
 	}
@@ -144,6 +165,7 @@ func startHTTPServer() {
 
 	mux.HandleFunc("/api/status", handleStatus)
 	mux.HandleFunc("/api/setup", handleSetup)
+	mux.HandleFunc("/api/wireplumber", handleWirePlumber)
 	mux.HandleFunc("/api/teardown", handleTeardown)
 	mux.HandleFunc("/api/verify", handleVerify)
 	mux.HandleFunc("/api/playback", handlePlayback)
@@ -186,6 +208,7 @@ func handleStatus(w http.ResponseWriter, r *http.Request) {
 		"product":        dev.Product,
 		"alsa_installed": cfg.ALSAMInstalled,
 		"wp_configured":  cfg.WPIgnoreInstalled,
+		"wp_disabled":    cfg.WPIgnoreDisabled,
 	}
 	if capture != nil {
 		resp["capture_channels"] = capture.Stream.Channels
@@ -217,7 +240,26 @@ func handleSetup(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, err)
 		return
 	}
-	jsonOK(w, map[string]interface{}{"ok": true, "message": "ALSA config and WirePlumber rule installed."})
+	jsonOK(w, map[string]interface{}{"ok": true, "message": "ALSA config and WirePlumber ignore rule installed."})
+}
+
+func handleWirePlumber(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Enabled bool `json:"enabled"`
+	}
+	if r.Method != "POST" || json.NewDecoder(r.Body).Decode(&body) != nil {
+		jsonError(w, fmt.Errorf("POST with enabled required"))
+		return
+	}
+	target := lewitt.InstallUser
+	if os.Geteuid() == 0 {
+		target = lewitt.InstallSystem
+	}
+	if err := lewitt.SetWPIgnore(target, body.Enabled, false); err != nil {
+		jsonError(w, err)
+		return
+	}
+	jsonOK(w, map[string]interface{}{"ok": true})
 }
 
 func handleTeardown(w http.ResponseWriter, r *http.Request) {
@@ -359,7 +401,7 @@ func handleLevels(w http.ResponseWriter, r *http.Request) {
 }
 
 func execSetup() {
-	notify("Do it, Lewitt!: Setup", "Installing ALSA config + WirePlumber rule...")
+	notify("Do it, Lewitt!: Setup", "Installing ALSA config and WirePlumber ignore rule...")
 	target := lewitt.InstallUser
 	if os.Geteuid() == 0 {
 		target = lewitt.InstallSystem

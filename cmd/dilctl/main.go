@@ -30,10 +30,10 @@ func main() {
 	rootCmd := &cobra.Command{
 		Use:   "dilctl",
 		Short: "Lewitt CONNECT 2 setup and diagnostics for Linux",
-		Long:  "dilctl configures the Lewitt CONNECT 2 audio interface to work correctly under Linux by installing an ALSA PCM (routing the 4-channel capture to the correct 2-channel FL/FR inputs) and a WirePlumber rule to keep the device free for direct ALSA access.",
+		Long:  "dilctl configures the Lewitt CONNECT 2 audio interface under Linux by installing an ALSA PCM that routes the 4-channel capture to the correct 2-channel FL/FR inputs while leaving the device available to PipeWire.",
 	}
 
-	rootCmd.AddCommand(statusCmd(), setupCmd(), verifyCmd(), diagnoseCmd(), teardownCmd(), resetCmd())
+	rootCmd.AddCommand(statusCmd(), setupCmd(), wireplumberCmd(), verifyCmd(), diagnoseCmd(), teardownCmd(), resetCmd())
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
@@ -109,16 +109,39 @@ func statusCmd() *cobra.Command {
 			} else {
 				fmt.Println("  — NOT installed")
 			}
-			fmt.Printf("  WirePlumber: ignore rule")
+			fmt.Printf("  PipeWire device management")
 			if status.WPIgnoreInstalled {
-				fmt.Println("  — configured ✓")
+				fmt.Println("  — ignore rule enabled ✓")
+			} else if status.WPIgnoreDisabled {
+				fmt.Println("  — ignore rule disabled (PipeWire enabled)")
 			} else {
-				fmt.Println("  — NOT configured")
+				fmt.Println("  — not configured")
 			}
 
 			return nil
 		},
 	}
+}
+
+func wireplumberCmd() *cobra.Command {
+	cmd := &cobra.Command{Use: "wireplumber", Short: "Enable or disable the WirePlumber ignore rule"}
+	for _, enabled := range []bool{true, false} {
+		name := "disable"
+		if enabled {
+			name = "enable"
+		}
+		value := enabled
+		cmd.AddCommand(&cobra.Command{Use: name, Short: name + " the generated WirePlumber ignore rule", RunE: func(cmd *cobra.Command, args []string) error {
+			target := lewitt.InstallSystem
+			if flagUser {
+				target = lewitt.InstallUser
+			}
+			return lewitt.SetWPIgnore(target, value, flagDryRun)
+		}})
+	}
+	cmd.PersistentFlags().BoolVar(&flagUser, "user", false, "use user WirePlumber configuration")
+	cmd.PersistentFlags().BoolVar(&flagDryRun, "dry-run", false, "show the change without applying it")
+	return cmd
 }
 
 func setupCmd() *cobra.Command {

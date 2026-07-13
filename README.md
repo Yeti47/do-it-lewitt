@@ -7,14 +7,14 @@ A utility for making the [Lewitt CONNECT 2](https://www.lewitt-audio.com/connect
 The Lewitt CONNECT 2 is a UAC2-compliant device that works under Linux, but it exposes its ALSA endpoints in a way that causes issues for reliable recording:
 
 - **Capture** is exposed as a **4-channel** stream (FL FR FC LFE), but only channels 0 (FL) and 1 (FR) are the real XLR mic inputs. Channels 2 and 3 are spurious.
-- **WirePlumber** (the PipeWire session manager) auto-selects the wrong profile and holds the device open, preventing direct ALSA access by applications like Audacity.
+- The device exposes a 4-channel capture endpoint, while desktop audio needs a normal PipeWire source and sink.
 
 ## The Solution
 
 This utility:
 
 1. **Installs an ALSA PCM** (`lewitt_connect_2`) that routes the 4-channel hardware capture down to the correct 2-channel (FL/FR) inputs, dropping the spurious channels.
-2. **Installs a WirePlumber rule** that tells WirePlumber to ignore the Lewitt device entirely, keeping it free for direct ALSA access.
+2. **Provides a WirePlumber switch**: the tested default ignores the device for direct ALSA access, while disabling the rule makes the CONNECT 2 available to PipeWire and desktop sound settings.
 3. **Provides diagnostics and verification** to confirm the device is working correctly.
 
 ## Prerequisites
@@ -74,7 +74,7 @@ dilctl setup --user
 
 This installs:
 - An ALSA config at `~/.config/alsa/asoundrc` defining the `lewitt_connect_2` PCM
-- A WirePlumber rule at `~/.config/wireplumber/main.lua.d/51-lewitt-ignore.lua` that prevents WirePlumber from grabbing the device
+- A WirePlumber ignore rule at `~/.config/wireplumber/main.lua.d/51-lewitt-ignore.lua` (enabled by default)
 
 Use `sudo ./dilctl setup` (without `--user`) to install system-wide at `/etc/alsa/conf.d/` and `/etc/wireplumber/` instead.
 
@@ -127,6 +127,7 @@ Usage:
 Available Commands:
   status      Show current device and configuration status
   setup       Install ALSA config and WirePlumber ignore rule
+  wireplumber Enable or disable the WirePlumber ignore rule
   verify      Record and playback test to confirm the device works
   diagnose    Dump full diagnostic information
   reset       Reset the CONNECT 2 USB device when it is stuck
@@ -137,6 +138,10 @@ Flags:
 
 Use "dilctl [command] --help" for more information about a command.
 ```
+
+### wireplumber flags
+
+Use `dilctl wireplumber disable` to expose the CONNECT 2 to PipeWire and Linux Mint's sound settings. Use `dilctl wireplumber enable` to restore direct ALSA mode. Both commands restart WirePlumber. Add `--user` for user configuration or omit it for system configuration.
 
 ### setup flags
 
@@ -155,7 +160,7 @@ Use "dilctl [command] --help" for more information about a command.
 
 ## Teardown
 
-To undo the setup and let WirePlumber manage the device again:
+To undo the setup and remove the ALSA PCM and WirePlumber rule:
 
 ```sh
 dilctl teardown

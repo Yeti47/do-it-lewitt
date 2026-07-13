@@ -121,6 +121,7 @@ h1 { font-size: 1.4rem; margin-bottom: 4px; }
     <div id="config-info"></div>
     <div class="btn-row">
       <button class="btn" onclick="doSetup()" id="btn-setup">Setup</button>
+      <button class="btn" onclick="toggleWirePlumber()" id="btn-wireplumber">Toggle PipeWire</button>
       <button class="btn" onclick="doTeardown()" id="btn-teardown">Teardown</button>
     </div>
   </div>
@@ -211,11 +212,21 @@ async function refreshStatus() {
 
   let cfg = '';
   cfg += row('ALSA PCM', s.alsa_installed ? 'installed ✓' : 'NOT installed', s.alsa_installed ? 'ok' : 'fail');
-  cfg += row('WirePlumber', s.wp_configured ? 'ignoring ✓' : 'NOT configured', s.wp_configured ? 'ok' : 'fail');
+  const wpEnabled = s.wp_configured;
+  const wpDisabled = s.wp_disabled;
+  cfg += row('WirePlumber', wpEnabled ? 'ignore rule enabled ✓' : (wpDisabled ? 'ignore rule disabled' : 'NOT configured'), wpEnabled ? 'ok' : (wpDisabled ? 'ok' : 'fail'));
+  document.getElementById('btn-wireplumber').textContent = wpEnabled ? 'Disable Ignore Rule' : 'Enable Ignore Rule';
   cfgInfo.innerHTML = cfg;
 
   document.getElementById('btn-setup').disabled = s.alsa_installed && s.wp_configured;
-  document.getElementById('btn-teardown').disabled = !s.alsa_installed && !s.wp_configured;
+  document.getElementById('btn-teardown').disabled = !s.alsa_installed && !s.wp_configured && !s.wp_disabled;
+}
+
+async function toggleWirePlumber() {
+  const s = await api('/api/status');
+  const r = await api('/api/wireplumber', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({enabled: !s.wp_configured})});
+  alert(r.ok ? 'WirePlumber setting changed.': 'Change failed:\n' + r.error);
+  refreshStatus();
 }
 
 function row(label, value, cls) {

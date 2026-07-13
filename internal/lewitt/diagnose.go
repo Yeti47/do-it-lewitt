@@ -96,7 +96,7 @@ func Diagnose() (string, error) {
 		sb.WriteString(fmt.Sprintf(" (%s)", status.ALSAMPath))
 	}
 	sb.WriteString("\n")
-	sb.WriteString(fmt.Sprintf("WirePlumber ignore rule: %v", status.WPIgnoreInstalled))
+	sb.WriteString(fmt.Sprintf("Legacy WirePlumber ignore rule present: %v", status.WPIgnoreInstalled))
 	if status.WPIgnoreInstalled {
 		sb.WriteString(fmt.Sprintf(" (%s)", status.WPIgnorePath))
 	}
