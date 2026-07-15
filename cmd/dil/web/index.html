@@ -122,6 +122,7 @@ h1 { font-size: 1.4rem; margin-bottom: 4px; }
     <div class="btn-row">
       <button class="btn" onclick="doSetup()" id="btn-setup">Setup</button>
       <button class="btn" onclick="toggleWirePlumber()" id="btn-wireplumber">Toggle PipeWire</button>
+      <button class="btn" onclick="doReset()" id="btn-reset">Reset USB</button>
       <button class="btn" onclick="doTeardown()" id="btn-teardown">Teardown</button>
     </div>
   </div>
@@ -249,6 +250,17 @@ async function doTeardown() {
   const r = await api('/api/teardown', {method: 'POST'});
   alert(r.ok ? 'Teardown complete!\n' + r.message : 'Teardown failed:\n' + r.error);
   document.getElementById('btn-teardown').textContent = 'Teardown';
+  refreshStatus();
+}
+
+async function doReset() {
+  if (!confirm('Reset the CONNECT 2 USB device? Recording and playback will be interrupted.')) return;
+  document.getElementById('btn-reset').textContent = 'Authenticating...';
+  document.getElementById('btn-reset').disabled = true;
+  const r = await api('/api/reset', {method: 'POST'});
+  alert(r.ok ? r.message : 'USB reset failed:\n' + r.error);
+  document.getElementById('btn-reset').textContent = 'Reset USB';
+  document.getElementById('btn-reset').disabled = false;
   refreshStatus();
 }
 

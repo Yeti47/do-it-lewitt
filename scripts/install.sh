@@ -127,19 +127,19 @@ if [[ "$NO_GUI" == false ]] && [[ "$NO_AUTOSTART" == false ]]; then
 [Unit]
 Description=Do it, Lewitt! — System Tray GUI
 After=graphical-session.target
-PartOf=graphical-session.target
 
 [Service]
 Type=simple
 ExecStart=$BIN_DIR/dil
-Restart=on-failure
+Restart=always
 RestartSec=5
 
 [Install]
-WantedBy=graphical-session.target
+WantedBy=default.target
 EOF
 
     systemctl --user daemon-reload
+    rm -f "$SERVICE_DIR/graphical-session.target.wants/dil.service"
     systemctl --user enable dil.service
     systemctl --user start dil.service 2>/dev/null || true
 

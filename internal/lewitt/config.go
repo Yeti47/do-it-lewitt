@@ -24,11 +24,7 @@ func (t InstallTarget) String() string {
 
 func InstallConfig(target InstallTarget, dryRun bool) error {
 	alsaConf := fmt.Sprintf(alsamSystemConfTemplate,
-		alsamPCMName, CardID,
-		alsamPCMName, CardID,
-		alsamPCMName, alsamPCMName,
-		alsamPCMName, alsamPCMName, alsamPCMName,
-		alsamPCMName, CardID)
+		alsamPCMName, CardID, CardID, alsamPCMName, CardID)
 
 	var alsaPath, wpPath string
 	if target == InstallSystem {

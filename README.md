@@ -116,6 +116,7 @@ Click **"Open GUI"** in the tray menu to open the web interface, which provides:
 
 - **Status tab** — device info and configuration state with Setup/Teardown buttons
 - **Verify tab** — live level meters and a record/playback test with a mono playback toggle
+- **Reset USB** — re-enumerates a stuck CONNECT 2 through the authenticated desktop `sudo` prompt
 - **Diagnostics tab** — full system diagnostic dump
 
 ## CLI Reference
@@ -238,10 +239,10 @@ All ALSA configs reference the device by its stable card ID (`C2`), not by card 
 
 ### How the ALSA PCM works
 
-The `lewitt_connect_2` PCM uses ALSA's `asym` plugin to handle capture and playback separately. Both directions use fixed native hardware settings of S32_LE at 48 kHz. This avoids repeatedly switching the CONNECT 2's USB alternate settings while applications probe devices, which can otherwise trigger firmware USB timeouts.
+The `lewitt_connect_2` PCM uses ALSA's `asym` plugin to handle capture and playback separately. Both directions use fixed native hardware settings of S32_LE at 48 kHz. It deliberately avoids `dmix` and `dsnoop`: Audacity opens the two directions independently, and the CONNECT 2 can time out when those shared plugins negotiate additional hardware streams.
 
-- **Capture**: `plug` → `route` → `dsnoop` → 4ch hw; extracts FL and FR via `ttable` and drops the spurious channels
-- **Playback**: `plug` → `dmix` → 2ch hw; allows shared access to the headphone output
+- **Capture**: `plug` → `route` → 4ch hw; extracts FL and FR via `ttable` and drops the spurious channels
+- **Playback**: `plug` → 2ch hw (headphone out)
 - Client applications can still request mono, 44.1 kHz, or 96 kHz; ALSA performs the conversion around the fixed hardware stream.
 
 ## License

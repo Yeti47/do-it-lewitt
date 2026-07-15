@@ -55,6 +55,7 @@ func onReady() {
 	mOpen := systray.AddMenuItem("Open GUI", "")
 	mSetup := systray.AddMenuItem("Setup", "")
 	mWP := systray.AddMenuItem("Toggle PipeWire Device", "")
+	mReset := systray.AddMenuItem("Reset USB Device", "")
 	mVerify := systray.AddMenuItem("Quick Verify", "")
 	mDiagnose := systray.AddMenuItem("Diagnostics", "")
 	systray.AddSeparator()
@@ -81,6 +82,8 @@ func onReady() {
 				}
 				updateTrayIcon()
 				updateTrayStatus(mStatus)
+			case <-mReset.ClickedCh:
+				execReset()
 			case <-mVerify.ClickedCh:
 				execVerify()
 			case <-mDiagnose.ClickedCh:
@@ -167,6 +170,7 @@ func startHTTPServer() {
 	mux.HandleFunc("/api/setup", handleSetup)
 	mux.HandleFunc("/api/wireplumber", handleWirePlumber)
 	mux.HandleFunc("/api/teardown", handleTeardown)
+	mux.HandleFunc("/api/reset", handleReset)
 	mux.HandleFunc("/api/verify", handleVerify)
 	mux.HandleFunc("/api/playback", handlePlayback)
 	mux.HandleFunc("/api/diagnose", handleDiagnose)
@@ -275,6 +279,22 @@ func handleTeardown(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	jsonOK(w, map[string]interface{}{"ok": true, "message": "Configuration removed. WirePlumber re-managing devices."})
+}
+
+func handleReset(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		jsonError(w, fmt.Errorf("POST required"))
+		return
+	}
+	if levelMeter != nil {
+		levelMeter.Stop()
+	}
+	output, err := resetViaSudo()
+	if err != nil {
+		jsonError(w, fmt.Errorf("USB reset failed: %w%s", err, formatCommandOutput(output)))
+		return
+	}
+	jsonOK(w, map[string]interface{}{"ok": true, "message": "USB device reset and re-enumerated successfully."})
 }
 
 func handleVerify(w http.ResponseWriter, r *http.Request) {
@@ -411,6 +431,34 @@ func execSetup() {
 	} else {
 		notify("Do it, Lewitt!: Setup complete", "Lewitt CONNECT 2 configured for direct ALSA access.")
 	}
+}
+
+func execReset() {
+	if levelMeter != nil {
+		levelMeter.Stop()
+	}
+	notify("Do it, Lewitt!: USB reset", "Authenticating to reset the CONNECT 2...")
+	output, err := resetViaSudo()
+	if err != nil {
+		notify("Do it, Lewitt!: USB reset failed", err.Error()+formatCommandOutput(output))
+		return
+	}
+	notify("Do it, Lewitt!: USB reset complete", "The CONNECT 2 was reset and re-enumerated.")
+	updateTrayIcon()
+}
+
+func resetViaSudo() (string, error) {
+	cmd := exec.Command("sudo", "-A", "dilctl", "reset")
+	output, err := cmd.CombinedOutput()
+	return string(output), err
+}
+
+func formatCommandOutput(output string) string {
+	output = strings.TrimSpace(output)
+	if output == "" {
+		return ""
+	}
+	return ": " + output
 }
 
 func execVerify() {
